@@ -12,6 +12,7 @@
 | [04-claude-mem.md](./04-claude-mem.md) | thedotmack/claude-mem | M1 chassis | 在 CC 外旁挂的底盘：瘦 hook + 常驻 worker + 增量 tail + SQLite + MCP |
 | [05-codex.md](./05-codex.md) | Vaibhav 自蒸馏 prompt | M3 (B) 新建判定 | 重复 workflow → 新建 skill 的门槛与 reuse-before-create |
 | [06-skill-creator.md](./06-skill-creator.md) | claude 官方插件 | 冷启动（非本 unit 主体） | draft→eval→improve + description 优化 |
+| [07-trace2skill.md](./07-trace2skill.md) | Qwen-Applications/Trace2Skill | M3 (B) 候选 | 与 SkillOpt 同源；skill=**目录** + conflict-free 合并 + agentic 验证驱动 error 分析；含 vs SkillOpt 对比表 |
 
 每个文档统一结构：**①它是什么 → ②我们搬什么/不搬什么 → ③具体怎么运作（代码级）→ ④落到哪个 milestone → ⑤关键参数默认值**。
 
