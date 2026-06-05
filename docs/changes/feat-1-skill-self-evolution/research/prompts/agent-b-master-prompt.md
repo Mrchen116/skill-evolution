@@ -46,6 +46,12 @@ ENDED and whether the user corrected, redid, or rejected the work along the way 
 signals usually appear AFTER the skill produced its output, so do not stop at the skill's
 first response. Record a ONE-LINE note per session: {what the task was; did it go well or
 poorly; if poorly, what specifically went wrong}.
+Also, while reading, watch for a department-knowledge gap — the user manually pasted an
+internal spec/convention/doc to get it done the department's way, or the agent guessed a
+department convention and was corrected. The signal lives HERE in the session and is lost
+once distilled, so when you spot it, QUERY the MCP tool ON THE SPOT (with this session's
+concrete situation) and record in the note what you found (reference+source+date) or, if not
+found, what knowledge was needed. NEVER invent department facts.
 
 ## Step 2 — find what RECURS across sessions
 Compare your notes. Identify the most prevalent, systematic problems (and effective wins)
@@ -105,11 +111,13 @@ Folder rules:
 - Do NOT touch anything between `<!-- SLOW_UPDATE_START -->` and `<!-- SLOW_UPDATE_END -->`.
 - Never write secrets, credentials, or private data into the skill.
 
-## Department knowledge — query the MCP tool ON THE SPOT
-If closing a lesson plausibly needs department conventions or internal information, QUERY
-the MCP knowledge base NOW.
-- If authoritative content exists: write the edit to embed a REFERENCE (link/path) + a
-  SHORT summary + provenance (source + date). Do not paste large verbatim content.
+## Department knowledge — detect while reading (Step 1), use here
+You should have queried the MCP tool back in Step 1, where a session shows a department-
+knowledge gap (that is where the signal is richest). When writing an edit:
+- Prefer the references you ALREADY fetched while reading — embed them: a REFERENCE
+  (link/path) + a SHORT summary + provenance (source + date). Do not paste large verbatim content.
+- Only if a qualified lesson clearly needs department knowledge that you did NOT fetch while
+  reading, query the MCP tool now as a fallback.
 - If it does not exist, or the MCP tool is unavailable: derive the fix from the sessions if
   it is clear, otherwise skip that lesson. NEVER invent department facts.
 
@@ -154,6 +162,10 @@ evidence. If you changed nothing, say so.
 判断它进行得如何为止：略读它，**尤其要看它是怎么结束的、过程中用户有没有纠正/重做/否定**这次
 工作——这些信号通常出现在 skill 产出结果**之后**，所以不要停在 skill 的第一次回复。为每个
 session 记**一行 note**：{任务是什么；进行得好还是差；若差，具体差在哪}。
+另外，读的时候留意**缺部门知识**的信号——用户手动粘了内部规范/约定/文档才把活按部门口径做成，
+或 agent 猜了个部门约定被纠正。这个信号**就在这条 session 里、蒸馏后就丢了**，所以一旦发现，
+**当场查 MCP 工具**（带这条 session 的具体情境），把查到的（引用+来源+日期）或（查不到时）
+"需要什么知识"记进 note。**绝不编造部门事实。**
 
 ## 第 2 步 —— 找出跨 session **反复出现**的东西
 比对你的 note。找出**跨多个 session 反复出现**的、最普遍且系统性的问题（以及有效的成功打法）
@@ -205,10 +217,11 @@ session 记**一行 note**：{任务是什么；进行得好还是差；若差�
 - **不要**碰 `<!-- SLOW_UPDATE_START -->` 与 `<!-- SLOW_UPDATE_END -->` 之间的任何内容。
 - 绝不把密钥、凭证、私人数据写进 skill。
 
-## 部门知识 —— **当场**查 MCP 工具
-若闭合一条教训可能需要部门约定或内部信息，**现在就查** MCP 知识库。
-- 若存在权威内容：把改动写成**嵌入一个引用（链接/路径）+ 一句简短摘要 + 出处（来源 + 日期）**。
+## 部门知识 —— 读取时（第 1 步）检测，这里用
+你应当已在**第 1 步**(读到某 session 显出缺部门知识处)就查过 MCP——那里信号最丰富。写改动时：
+- **优先用读取时已查到的引用**，嵌进去：一个引用（链接/路径）+ 一句简短摘要 + 出处（来源 + 日期）。
   不要粘贴大段原文。
+- 仅当某条立住的教训**明显需要、而你读取时没查过**的部门知识，才在此**兜底**查一次 MCP。
 - 若不存在、或 MCP 工具不可用：若从 session 里能看清就据此推导，否则跳过该条教训。**绝不编造部门事实。**
 
 ## 收尾
