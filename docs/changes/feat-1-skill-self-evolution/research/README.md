@@ -6,7 +6,7 @@
 
 | 文件 | 参考源 | 落地于 | 一句话 |
 |---|---|---|---|
-| [01-skillopt.md](./01-skillopt.md) | microsoft/SkillOpt | M3 (B) | 从一批轨迹提炼有界编辑的引擎：success/failure 分桶、analyst、support_count、ranking、rejected buffer、保护区 |
+| [01-skillopt.md](./01-skillopt.md) | microsoft/SkillOpt | M3 (B) | 从一批轨迹提炼有界编辑的引擎：success/failure 分桶、analyst、support_count、ranking、保护区（注：gate/rejected buffer 是其离线机制，在线不搬，见 §4） |
 | [02-hermes.md](./02-hermes.md) | hermes-agent | M2 (A) / M4 (C) | 运行期两层进化：per-turn review 触发 + skill_manage 工具 + Curator + provenance |
 | [03-auto-dream.md](./03-auto-dream.md) | Claude Code | M3 (B) 调度 | 后台反思的门控（时间/量/锁/节流）+ 输入装配 + 整理纪律 |
 | [04-claude-mem.md](./04-claude-mem.md) | thedotmack/claude-mem | M1 chassis | 在 CC 外旁挂的底盘：瘦 hook + 常驻 worker + 增量 tail + SQLite + MCP |
@@ -20,16 +20,17 @@
 
 ## 跨源核心流程一：在线进化闭环（替代 SkillOpt 离线训练循环）
 
-SkillOpt 的离线循环是 `rollout → reflect → aggregate → select → update → gate(留出集打分) → accept/reject`。我们在线没有可重放打分的留出集，把它改造成"持续轨迹流自纠"：
+SkillOpt 的离线循环是 `rollout → reflect → aggregate → select → update → gate(留出集打分) → accept/reject`。我们在线没有可重放打分的留出集——但**不重建 gate 那堵墙**。**对齐 Hermes（最成熟的在线方案，它刻意不衡量"改动有没有效"）**：质量靠**入口证据门槛 + 可逆**，不靠"测效果/复发回滚"。
 
 ```
 真实使用产生轨迹(jsonl)
   → [A: 单session 即时] 或 [B: 门控触发的批量]
-  → reflect(分析轨迹) → aggregate/select(有界, top-L) → update(apply+快照)
-  → 不打分直接生效
-  → 下一批轨迹回看: 上次补丁针对的问题还复发吗? / 出现回归吗?
-       复发或回归 → rollback + 写 rejected-edit buffer(下次别再犯)
-       不复发 → 保留
+  → reflect(分析轨迹) → select(有界, top-L, 跨会话反复≥2 才采纳)
+  → update(apply + 先快照) → 直接生效
+  → 质量靠: ① 入口只在 ≥2 反复才改  ② 每改可逆(快照/archive/provenance)
+            ③ 持续进化自然收敛(真实需求反复产证据,下一轮继续朝它改)
+            ④ C 周期维护(archive/merge/dedupe)
+  ❌ 不做: 效果打分 / 失败指纹跨批比对 / 复发回滚 / outcome-driven rejected_edits
 ```
 
 **对照表**（SkillOpt 离线 → 我们在线）：
@@ -39,7 +40,7 @@ SkillOpt 的离线循环是 `rollout → reflect → aggregate → select → up
 | rollout 打分 | 在数据集上跑、有 ground-truth `hard/soft` | 真实使用轨迹 + 启发式 success/failure 打标 | [01](./01-skillopt.md#3) |
 | reflect | minibatch analyst（成功/失败分桶） | **照搬**（B 层） | [01](./01-skillopt.md#3) |
 | select | ranking top-L（edit budget） | **照搬** + support_count≥2 门槛 | [01](./01-skillopt.md#3) [05](./05-codex.md) |
-| gate | held-out 严格更高才接受 | **丢弃**；改"下一批自纠 + rejected buffer" | [01](./01-skillopt.md#4) |
+| gate | held-out 严格更高才接受 | **丢弃且不重建**；改**入口 ≥2 门槛 + 可逆**（Hermes 式，不做效果反馈） | [01](./01-skillopt.md#4) |
 | slow update | epoch 末纵向对比、写保护区 | 由 Curator(C) 周期维护保护区 | [01](./01-skillopt.md#5) [02](./02-hermes.md#4) |
 
 ---
@@ -80,8 +81,8 @@ successes = [r for r in results if r.get("hard")]                               
 | | A 实时 (M2) | B 批量 (M3) | C 维护 (M4) |
 |---|---|---|---|
 | 源 | Hermes per-turn | auto-dream 调度 + SkillOpt 引擎 | Hermes Curator + SkillOpt slow_update |
-| 触发 | PostToolUse 计数≥10 且 Stop | 门控：距上次≥Xh 且 新 session≥N | idle≥2h 且 距上次≥7天 |
-| 看的范围 | 当前单 session | 一批多 session | 整个 skill 库 |
+| 触发 | PostToolUse 计数≥10 且 Stop | 门控：**某 skill 自上次 B 后被用 >X 次**（per-skill 计数，只取已结束 session） | idle≥2h 且 距上次≥7天 |
+| 看的范围 | 当前单 session | **这一个 skill** 的一批已结束 session | 整个 skill 库 |
 | 分析脑 | 自由 review（轻） | minibatch 分桶 analyst（重） | 合并/归档判定 + 保护区 slow_update |
-| 主要动作 | 即时 patch/create | 挖共性 patch + 新建 + MCP 注入 + 自纠 | archive/merge/dedupe |
+| 主要动作 | 即时 patch/create | 挖共性 patch + MCP 注入（**只改不建、不做效果反馈/自纠**） | archive/merge/dedupe |
 | 详见 | [02 §1-3](./02-hermes.md) | [01](./01-skillopt.md) + [03](./03-auto-dream.md) | [02 §4](./02-hermes.md) + [01 §5](./01-skillopt.md) |

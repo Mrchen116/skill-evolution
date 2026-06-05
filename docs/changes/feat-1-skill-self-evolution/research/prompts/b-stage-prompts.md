@@ -2,18 +2,20 @@
 
 > 在 SkillOpt 原文（[skillopt-prompts.md](./skillopt-prompts.md)）基础上改造，落地 spec/design 的 4 个决策：
 > A=轻量 LLM 标注器 · B=开放式找缺口（**不做固定分类**，4 例子仅作提示）· C=**内联 MCP**（analyst 自带 MCP 工具当场查，避免"需要/有没有"错配）· D=success 侧保留但弱化。
+> **E（2026-06 修正）=不做效果反馈**：对齐 Hermes（最成熟的在线方案，它不衡量"改动有没有效"）——质量靠**入口 ≥2 门槛 + 可逆 + 持续进化收敛 + C 维护**，**删掉了"失败指纹比对/复发回滚/outcome-rejected_edits"**（那是离线 gate 的山寨）。下文凡涉及"步6 自纠/指纹/rejected_edits"的旧草稿均已据此修订。
 > prompt 正文用英文（目标 agent 读），中文是注解。**草案,待逐步精修。**
 
 ## 管线回顾（哪步是 LLM 调用）
 
 ```
-0 打标(LLM 标注器)  → 每段轨迹切片 → success/failure + 失败指纹
-1 analyst_error(LLM+MCP) → failure 桶找共性缺口 → edits
+0 打标(LLM 标注器)  → 每段轨迹切片 → success/failure/unclear（只为分桶，不抽指纹）
+1 analyst_error(LLM+MCP) → failure 桶找共性缺口 → edits（跨会话反复≥2 才采纳）
 2 analyst_success(LLM)   → success 桶找共性赢法 → edits（弱化）
 3 aggregate(LLM)         → 多 minibatch 合并(失败优先)；只有 1 个 minibatch 时跳过
 4 ranking(LLM)           → 选 top-L + support_count≥2 门槛 + reuse-first
 5 apply(确定性)          → 先快照→fuzzy 改→安全扫描→fail 回滚
-6 自纠(确定性,无新 prompt) → 失败指纹复发?→rollback + 写 rejected_edits，回灌步1
+（无"步6 自纠"）质量靠：入口≥2门槛 + 可逆(快照/archive/provenance) + 持续进化收敛 + C维护
+                ❌ 不做效果打分/失败指纹比对/复发回滚/outcome-rejected_edits（对齐 Hermes，见 01 §4）
 ```
 
 **自适应**：若某 skill 触发时 failure 切片总量能塞进上下文（~几条），令 minibatch = 整桶 → analyst 一次看全、直接产 support_count，**跳过 aggregate**。SkillOpt 切 minibatch+aggregate 是为 40 题大 batch；我们单 skill 量小，能合则合。
@@ -22,7 +24,7 @@
 
 ## 步 0 · 轨迹标注器（NEW，SkillOpt 无——它用数据集 ground-truth）
 
-**第一性原理**：在线无 label，要把该 skill 的每段轨迹切片判成 success/failure，**并抽出"失败指纹"**（一句可泛化的问题名）——指纹是步 6 自纠"判断是否复发"的钥匙。
+**第一性原理**：在线无 label，要把该 skill 的每段轨迹切片判成 success/failure，**只为给 analyst 分桶**。（早期草稿还让它抽"失败指纹"做复发比对——**已按决策 E 删除**，我们不做效果反馈。）
 
 ```text
 You are a trajectory tagger for an online skill-evolution system.
@@ -40,17 +42,11 @@ POORLY, from the USER's point of view:
 - WELL (success): completed smoothly, no rework, no correction.
 If you cannot tell, answer "unclear" rather than guess.
 
-If POORLY, extract a concise, GENERALIZABLE "failure fingerprint" — a short phrase naming
-the recurring problem (e.g. "ignored repo's named-export convention", "missed empty-input
-case"), NOT the one-off specifics. This fingerprint is later used to check whether a fix
-actually stopped the problem from recurring.
-
 Respond ONLY with JSON (no fences):
 { "label": "success" | "failure" | "unclear",
-  "fingerprint": "<short generalizable failure phrase, or empty>",
   "evidence": "<one line: what in the slice led to this label>" }
 ```
-注：`unclear` 的不进任一桶（不污染分析）。`fingerprint` 存 `fitness_signals`。
+注：`unclear` 的不进任一桶（不污染分析）。**不再抽取/存储失败指纹**（决策 E）。
 
 ---
 
@@ -61,7 +57,7 @@ Respond ONLY with JSON (no fences):
 2. **开放式找缺口**（决策 B）：把"找共性失败模式"重述成"比对 skill 现状 vs 轨迹实际所需，找反复缺口"；4 例子作**提示**，明令"别局限于此"。
 3. **内联 MCP**（决策 C）：给它 MCP 只读工具，指示"疑似缺部门知识就**当场查**，查到才嵌引用、查不到就跳过或走轨迹推导"——解决错配。
 4. **support_count 直接产**：analyst 看整个 minibatch，每条缺口直接给 support_count（SkillOpt 是 merge 才打；单 skill 量小，提前产更省一次 merge 推断）。
-5. **rejected_edits 负反馈**注入（SkillOpt 同款 `rejection_context`）。
+5. ~~rejected_edits 负反馈注入~~ **（决策 E 删除）**：在线不做效果反馈，无"被否改动"来源。
 6. 保留 SkillOpt 原文约束：≤L、generalizable、不重复已有、不碰保护区。
 
 ```text
@@ -72,8 +68,6 @@ You are given:
 - The skill's current full SKILL.md (the only document you may edit).
 - A MINIBATCH of real trajectories where this skill was used and the task went POORLY,
   taken from one user's recent ENDED sessions.
-- REJECTED_EDITS: edits previously tried on this skill and reverted because they didn't
-  help or caused regressions. Do NOT re-propose these or close variants.
 - TOOLS: read-only access to the department knowledge base via MCP.
 
 GOAL: find the most important COMMON gaps across the batch — places where the skill's
@@ -167,13 +161,17 @@ Respond ONLY with JSON:
   "selected_indices": [<0-based indices of top edits, priority order>] }
 ```
 
-## 步 6 · 自纠（无新 prompt，确定性 + 回灌）
+## ~~步 6 · 自纠~~ → 已删除（决策 E）：在线不做效果反馈
 
-**机制**（SkillOpt rejected-edit buffer 在线化）：
-- 每次 apply 前 `SkillStore.snapshot`。
-- B 下次跑**这个 skill** 时：用步 0 的失败指纹比对——上轮某条 edit 针对的指纹，这批是否仍出现 / 是否冒出新回归。
-- **仍复发或回归** → `rollback` 到改前快照 + 把该 edit 连同"为何判定无效"写入 `rejected_edits`。
-- `rejected_edits` 作为步 1 的 `REJECTED_EDITS` 输入回灌（"别再提这些"）——闭环。
+早期草稿在这里设计了"失败指纹比对 + 复发回滚 + rejected_edits 回灌"——这是把 SkillOpt 的离线 gate/buffer 山寨到在线。**已删除**，理由（一手确认，详见 [01 §4](../01-skillopt.md#4)）：
+
+- 最成熟的在线方案 **Hermes 刻意不衡量"改动有没有效"**（usage 只记次数、Curator 只按时间衰减、A 改完不回头看）。
+- 在线无 gate → 无"被否改动"来源；失败指纹是 LLM 自由文本，跨批比对两端都模糊、无 ground truth。
+
+**取而代之的在线质量保障**（apply 前后只剩这些，全部确定性、无新 prompt）：
+- 每次 apply 前 `SkillStore.snapshot`（可逆底座）；archive 不硬删；provenance 护 seed/user。
+- 质量挡在**入口**：步 4 的 `support_count≥2` 门槛 + reuse-first。
+- 坏改动不长期生效，靠**持续进化自然收敛**（真实需求反复产证据，下一轮继续朝它改）+ 可随时 archive 回退，**不靠系统主动测效果回滚**。
 
 ---
 

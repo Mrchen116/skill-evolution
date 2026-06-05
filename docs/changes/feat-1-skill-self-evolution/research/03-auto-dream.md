@@ -39,7 +39,7 @@ Gate 3 PID 锁：memory 目录下 .consolidate-lock（持有者 PID + mtime；�
 auto-dream 给 fork 子 agent 的不是一条 prompt，是"完整 API 前缀 + 一条新 user message"：
 A. systemPrompt（含格式/类型规范）｜B. userContext（全部资产 + currentDate）｜C. systemContext（git 等）｜D. 主 session 完整对话（共享 cache）｜E. 新 user message（四阶段任务指令 + session 列表）。
 
-→ B 层子 agent 输入照此组织：**全部当前 skill 列表**（对应 A/B 层的"input 所有 skill"）+ **本批轨迹切片**（窄读）+ **任务指令**（minibatch analyst 指令）+ rejected_edits 负反馈。继承主 session cache 前缀省钱。
+→ B 层子 agent 输入照此组织：**全部当前 skill 列表**（对应 A/B 层的"input 所有 skill"）+ **本批轨迹切片**（窄读）+ **任务指令**（minibatch analyst 指令）。（注：早期还列了 rejected_edits 负反馈——**已按决策 E 删除**，在线不做效果反馈；另：我们在 CC 外，**拿不到主 session cache 便宜**，需自付 token，见 §⑦ 三类。）
 
 ## ⑤ 整理纪律（搬给 MCP 注入 + Curator）
 
